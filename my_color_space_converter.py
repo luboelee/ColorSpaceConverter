@@ -97,19 +97,38 @@ def test():
     print(f"BT.2020 : {y2020}")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Color Space Converter. [10bit supported]', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-y', '--yuv', nargs='*', help='YUV value (Y, U, V)', type=int)
-    parser.add_argument('-r', '--rgb', nargs='*', help='RGB value (R, G, B)', type=int)
-    parser.add_argument('-s', '--standard', default='bt601', choices=['bt601', 'bt709', 'bt2020'], help='Color Space Standard', type=str)
-    parser.add_argument('-t', '--range', default='full', choices=['full', 'limited', 'fr', 'lr'], help='Color Range', type=str)
-    parser.add_argument('-b', '--bit-depth', default=8, choices=[8, 10], help='Bit Depth', type=int)
-    
-    args = parser.parse_args()
-    if args.yuv == None and args.rgb == None:
-        print("[Error] ./python3 my_color_space_converter.py -h\n")
-        exit(-1)
+# expected 120, 194, 87 --> real : 125, 209, 90
 
+def run_all_cases(args):
+    standard_array = ['bt601', 'bt709', 'bt2020']
+    range_array = ['full', 'limited']
+    bit_depth_array = [8, 10]
+    
+    converter = MyColorSpaceConverter()
+    
+    # RGB --> YUV --> RGB
+    # YUV LR, FR, BT601, BT709, BT2020
+    if args.rgb != None:
+        for standard in standard_array:
+            for range_type in range_array:
+                for bit_depth in bit_depth_array:
+                    r, g, b = args.rgb[0], args.rgb[1], args.rgb[2]
+                    y, u, v = converter.rgb_to_yuv(r, g, b, standard=standard, range_type=range_type, bit_depth=bit_depth)
+                    r_out, g_out, b_out = converter.yuv_to_rgb(y, u, v, standard=standard, range_type=range_type, bit_depth=bit_depth)
+                    print(f'Converter RGB --> YUV --> RGB {standard}, {range_type}, {bit_depth}bit: {r}, {g}, {b} --> {y}, {u}, {v} --> {r_out}, {g_out}, {b_out}')
+    elif args.yuv != None:
+        # YUV --> RGB --> YUV
+        for standard in standard_array:
+            for range_type in range_array:
+                for bit_depth in bit_depth_array:
+                    y, u, v = args.yuv[0], args.yuv[1], args.yuv[2]
+                    r, g, b = converter.yuv_to_rgb(y, u, v, standard=standard, range_type=range_type, bit_depth=bit_depth)
+                    y_out, u_out, v_out = converter.rgb_to_yuv(r, g, b, standard=standard, range_type=range_type, bit_depth=bit_depth)
+                    print(f'Converter YUV --> RGB --> YUV {standard}, {range_type}, {bit_depth}bit: {y}, {u}, {v} --> {r}, {g}, {b} --> {y_out}, {u_out}, {v_out}')
+
+    print("\n")
+
+def run_specific_case(args):
     color_range = args.range
     if args.range == 'fr':
         color_range = 'full'
@@ -119,7 +138,30 @@ if __name__ == "__main__":
     converter = MyColorSpaceConverter()
     if args.yuv != None:
         v0, v1, v2 = converter.yuv_to_rgb(args.yuv[0], args.yuv[1], args.yuv[2], standard=args.standard, range_type=color_range, bit_depth=args.bit_depth)
-        print(f'Converter YUV to RGB {args.standard}, {color_range}: {args.yuv[0]}, {args.yuv[1]}, {args.yuv[2]} --> {v0}, {v1}, {v2}')
+        print(f'Converter YUV to RGB {args.standard}, {color_range}: {args.yuv[0]}, {args.yuv[1]}, {args.yuv[2]} --> {v0}, {v1}, {v2}\n')
     elif args.rgb != None:
         v0, v1, v2 = converter.rgb_to_yuv(args.rgb[0], args.rgb[1], args.rgb[2], standard=args.standard, range_type=color_range, bit_depth=args.bit_depth)
-        print(f'Converter RGB to YUV {args.standard}, {color_range}: {args.rgb[0]}, {args.rgb[1]}, {args.rgb[2]} --> {v0}, {v1}, {v2}')
+        print(f'Converter RGB to YUV {args.standard}, {color_range}: {args.rgb[0]}, {args.rgb[1]}, {args.rgb[2]} --> {v0}, {v1}, {v2}\n')    
+
+# expected 120, 194, 87 --> real : 125, 209, 90
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Color Space Converter. [10bit supported]', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-y', '--yuv', nargs='*', help='YUV value (Y, U, V)', type=int)
+    parser.add_argument('-r', '--rgb', nargs='*', help='RGB value (R, G, B)', type=int)
+    parser.add_argument('-s', '--standard', default='bt601', choices=['bt601', 'bt709', 'bt2020'], help='Color Space Standard', type=str)
+    parser.add_argument('-t', '--range', default='full', choices=['full', 'limited', 'fr', 'lr'], help='Color Range', type=str)
+    parser.add_argument('-b', '--bit-depth', default=8, choices=[8, 10], help='Bit Depth', type=int)
+    parser.add_argument('-a', '--all', default=0, choices=[0, 1], help='Enable all test', type=int)
+    
+    args = parser.parse_args()
+    if args.yuv == None and args.rgb == None:
+        print("[Error] ./python3 my_color_space_converter.py -h\n")
+        exit(-1)
+
+    if args.all == 0:
+        run_specific_case(args)
+    elif args.all == 1:
+        run_all_cases(args)
+    else:
+        print("[Error] ./python3 my_color_space_converter.py -h\n")
+        exit(-1)
