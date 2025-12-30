@@ -67,6 +67,7 @@ class MyColorSpaceConverter:
 
         return self._clamp(r, max_val), self._clamp(g, max_val), self._clamp(b, max_val)
 
+        return self._clamp(y, max_val), self._clamp(u, max_val), self._clamp(v, max_val)
 
 def test():
     cvt = MyColorSpaceConverter()
