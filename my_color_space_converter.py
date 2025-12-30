@@ -96,9 +96,6 @@ def test():
     print(f"BT.709  : {y709}")
     print(f"BT.2020 : {y2020}")
 
-
-# expected 120, 194, 87 --> real : 125, 209, 90
-
 def run_all_cases(args):
     standard_array = ['bt601', 'bt709', 'bt2020']
     range_array = ['full', 'limited']
@@ -143,7 +140,33 @@ def run_specific_case(args):
         v0, v1, v2 = converter.rgb_to_yuv(args.rgb[0], args.rgb[1], args.rgb[2], standard=args.standard, range_type=color_range, bit_depth=args.bit_depth)
         print(f'Converter RGB to YUV {args.standard}, {color_range}: {args.rgb[0]}, {args.rgb[1]}, {args.rgb[2]} --> {v0}, {v1}, {v2}\n')    
 
-# expected 120, 194, 87 --> real : 125, 209, 90
+
+def cts_checker(args):
+    converter = MyColorSpaceConverter()
+    
+    if args.rgb == None:
+        print("[Error] For cts issue check, RGB value is required.")
+        exit(-1)
+    
+    standard_array = ['bt601', 'bt709']
+    range_array = ['full', 'limited']
+    bit_depth_array = [8]
+    
+    r = args.rgb[0]
+    g = args.rgb[1]
+    b = args.rgb[2]
+    
+    # exprected(RGB): 120, 194, 87  --> real(RGB): 125, 209, 90
+    idx = 0
+    for std_src in standard_array:
+        for std_dst in standard_array:
+            for range_src in range_array:
+                for range_dst in range_array:
+                    y, u, v = converter.rgb_to_yuv(r, g, b, standard=std_src, range_type=range_src, bit_depth=8)
+                    r_out, g_out, b_out = converter.yuv_to_rgb(y, u, v, standard=std_dst, range_type=range_dst, bit_depth=8)
+                    print(f'{idx}.Converter RGB --> YUV{std_src}, {range_src} --> RGB{std_dst}, {range_dst}, 8bit: {r}, {g}, {b} --> {y}, {u}, {v} --> {r_out}, {g_out}, {b_out}')
+                    idx += 1
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Color Space Converter. [10bit supported]', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-y', '--yuv', nargs='*', help='YUV value (Y, U, V)', type=int)
@@ -151,7 +174,7 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--standard', default='bt601', choices=['bt601', 'bt709', 'bt2020'], help='Color Space Standard', type=str)
     parser.add_argument('-t', '--range', default='full', choices=['full', 'limited', 'fr', 'lr'], help='Color Range', type=str)
     parser.add_argument('-b', '--bit-depth', default=8, choices=[8, 10], help='Bit Depth', type=int)
-    parser.add_argument('-a', '--all', default=0, choices=[0, 1], help='Enable all test', type=int)
+    parser.add_argument('-a', '--all', default=0, choices=[0, 1, 2], help='Enable all test', type=int)
     
     args = parser.parse_args()
     if args.yuv == None and args.rgb == None:
@@ -162,6 +185,8 @@ if __name__ == "__main__":
         run_specific_case(args)
     elif args.all == 1:
         run_all_cases(args)
+    elif args.all == 2:
+        cts_checker(args)
     else:
         print("[Error] ./python3 my_color_space_converter.py -h\n")
         exit(-1)
