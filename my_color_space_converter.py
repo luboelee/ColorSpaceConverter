@@ -165,7 +165,7 @@ def cts_checker(args):
                 for range_dst in range_array:
                     y, u, v = converter.rgb_to_yuv(r, g, b, standard=std_src, range_type=range_src, bit_depth=8)
                     r_out, g_out, b_out = converter.yuv_to_rgb(y, u, v, standard=std_dst, range_type=range_dst, bit_depth=8)
-                    print(f'{idx}.Converter RGB --> YUV{std_src}, {range_src} --> RGB{std_dst}, {range_dst}, 8bit: {r}, {g}, {b} --> {y}, {u}, {v} --> {r_out}, {g_out}, {b_out}')
+                    print(f'{idx}.Converter RGB --> YUV ({std_src}, {range_src}) --> RGB ({std_dst}, {range_dst}), 8bit: {r}, {g}, {b} --> {y}, {u}, {v} --> {r_out}, {g_out}, {b_out}')
                     idx += 1
 
 if __name__ == "__main__":
