@@ -67,6 +67,7 @@ class MyColorSpaceConverter:
 
         return self._clamp(r, max_val), self._clamp(g, max_val), self._clamp(b, max_val)
 
+        return self._clamp(y, max_val), self._clamp(u, max_val), self._clamp(v, max_val)
 
 def test():
     cvt = MyColorSpaceConverter()
@@ -96,6 +97,9 @@ def test():
     print(f"BT.709  : {y709}")
     print(f"BT.2020 : {y2020}")
 
+        r_n = y_n + (2 * (1 - kr)) * v_n
+        b_n = y_n + (2 * (1 - kb)) * u_n
+        g_n = (y_n - kr * r_n - kb * b_n) / kg
 
 # expected 120, 194, 87 --> real : 125, 209, 90
 
