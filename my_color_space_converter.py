@@ -4,87 +4,106 @@ import argparse
 class MyColorSpaceConverter:
     def __init__(self):
         self.coefficients = {
-            'bt601': (0.299, 0.587, 0.114),
-            'bt709': (0.2126, 0.7152, 0.0722)
+            'bt601':  (0.2990, 0.5870, 0.1140), # SDTV
+            'bt709':  (0.2126, 0.7152, 0.0722), # HDTV
+            'bt2020': (0.2627, 0.6780, 0.0593)  # UHDTV (4K/8K)
         }
 
-    def _clamp(self, value):
-        return max(0, min(255, int(round(value))))
+    def _clamp(self, value, max_val):
+        return max(0, min(max_val, int(round(value))))
 
-    def rgb_to_yuv(self, r, g, b, standard='bt601', range_type='limited'):
-        kr, kg, kb = self.coefficients.get(standard, self.coefficients['bt601'])
+    def _get_range_params(self, bit_depth, range_type):
+        max_val = (1 << bit_depth) - 1  # 8bit=255, 10bit=1023
         
-        y_raw = kr * r + kg * g + kb * b
-        u_raw = (b - y_raw) / (2 * (1 - kb))
-        v_raw = (r - y_raw) / (2 * (1 - kr))
+        shift = bit_depth - 8
+        scale_factor = 1 << shift 
 
         if range_type == 'full':
-            y = y_raw
-            u = u_raw + 128
-            v = v_raw + 128
+            y_offset = 0
+            y_range = max_val
+            uv_offset = 128 * scale_factor
+            uv_range = max_val
         else:
-            # Limited Range
-            # Y: 16 ~ 235 (scale 219/255)
-            # U, V: 16 ~ 240 (scale 224/255) + 128 offset
-            y = (219.0 / 255.0) * y_raw + 16
-            u = (224.0 / 255.0) * u_raw + 128
-            v = (224.0 / 255.0) * v_raw + 128
+            y_offset = 16 * scale_factor
+            y_range = 219 * scale_factor
+            uv_offset = 128 * scale_factor
+            uv_range = 224 * scale_factor
+            
+        return max_val, y_offset, y_range, uv_offset, uv_range
 
-        return self._clamp(y), self._clamp(u), self._clamp(v)
+    def rgb_to_yuv(self, r, g, b, standard='bt709', range_type='limited', bit_depth=8):
+        kr, kg, kb = self.coefficients.get(standard, self.coefficients['bt709'])
+        max_val, y_off, y_rng, uv_off, uv_rng = self._get_range_params(bit_depth, range_type)
 
-    def yuv_to_rgb(self, y, u, v, standard='bt601', range_type='limited'):
-        kr, kg, kb = self.coefficients.get(standard, self.coefficients['bt601'])
+        r_n = r / max_val
+        g_n = g / max_val
+        b_n = b / max_val
 
-        if range_type == 'full':
-            y_norm = y
-            u_norm = u - 128
-            v_norm = v - 128
-        else:
-            y_norm = (y - 16) * (255.0 / 219.0)
-            u_norm = (u - 128) * (255.0 / 224.0)
-            v_norm = (v - 128) * (255.0 / 224.0)
-        
-        r = y_norm + (2 * (1 - kr)) * v_norm
-        b = y_norm + (2 * (1 - kb)) * u_norm
-        g = (y_norm - kr * r - kb * b) / kg
+        y_raw = kr * r_n + kg * g_n + kb * b_n
+        u_raw = (b_n - y_raw) / (2 * (1 - kb))
+        v_raw = (r_n - y_raw) / (2 * (1 - kr))
 
-        return self._clamp(r), self._clamp(g), self._clamp(b)
+        y = y_rng * y_raw + y_off
+        u = uv_rng * u_raw + uv_off
+        v = uv_rng * v_raw + uv_off
+
+        return self._clamp(y, max_val), self._clamp(u, max_val), self._clamp(v, max_val)
+
+    def yuv_to_rgb(self, y, u, v, standard='bt709', range_type='limited', bit_depth=8):
+        kr, kg, kb = self.coefficients.get(standard, self.coefficients['bt709'])
+        max_val, y_off, y_rng, uv_off, uv_rng = self._get_range_params(bit_depth, range_type)
+
+        y_n = (y - y_off) / y_rng
+        u_n = (u - uv_off) / uv_rng
+        v_n = (v - uv_off) / uv_rng
+
+        r_n = y_n + (2 * (1 - kr)) * v_n
+        b_n = y_n + (2 * (1 - kb)) * u_n
+        g_n = (y_n - kr * r_n - kb * b_n) / kg
+
+        r = r_n * max_val
+        g = g_n * max_val
+        b = b_n * max_val
+
+        return self._clamp(r, max_val), self._clamp(g, max_val), self._clamp(b, max_val)
 
 
 def test():
-    converter = MyColorSpaceConverter()
-    
-    print("--- Red Color (255, 0, 0) Conversion [Limited Range] ---")
-    
-    y6, u6, v6 = converter.rgb_to_yuv(255, 0, 0, standard='bt601')
-    print(f"BT.601 YUV: ({y6}, {u6}, {v6})")
+    cvt = MyColorSpaceConverter()
 
-    y7, u7, v7 = converter.rgb_to_yuv(255, 0, 0, standard='bt709')
-    print(f"BT.709 YUV: ({y7}, {u7}, {v7})")
+    print("=== 1. 10-bit BT.2020 Limited Range Test ===")
+    # 10-bit Red (1023, 0, 0)
+    # What is the Y value in BT.2020 Limited Range?
+    r_in, g_in, b_in = 1023, 0, 0
+    y, u, v = cvt.rgb_to_yuv(r_in, g_in, b_in, standard='bt2020', range_type='limited', bit_depth=10)
     
-    print("\n>> Description: In Limited range, since the weight of Red in BT.709 (0.21) is lower than in BT.601 (0.29),")
-    print("   in BT.601 (0.29), the Y value (brightness) for the same red color is calculated to be lower in BT.709.")
-
-
-    print("\n\n")
-    print("--- Red Color (255, 0, 0) Conversion [Full Range] ---")
+    print(f"Input RGB(10-bit): ({r_in}, {g_in}, {b_in})")
+    print(f"-> BT.2020 YUV:    ({y}, {u}, {v})")
+    print(f"   (Note: 10-bit Limited Y range is 64~940, UV center is 512)")
     
-    y6, u6, v6 = converter.rgb_to_yuv(255, 0, 0, standard='bt601', range_type='full')
-    print(f"BT.601 YUV: ({y6}, {u6}, {v6})")
-
-    y7, u7, v7 = converter.rgb_to_yuv(255, 0, 0, standard='bt709', range_type='full')
-    print(f"BT.709 YUV: ({y7}, {u7}, {v7})")
+    # Verify inverse conversion
+    r_out, g_out, b_out = cvt.yuv_to_rgb(y, u, v, standard='bt2020', range_type='limited', bit_depth=10)
+    print(f"-> Restore RGB:    ({r_out}, {g_out}, {b_out})")
     
-    print("\n>> Description: In Full range, because the Red coefficient in BT.709 (0.21) is lower than that of BT.601 (0.29),")
-    print("   the resulting Y value (luma) for an identical red input is lower in BT.709.")
+    print("\n=== 2. BT.709 vs BT.2020 Difference (8-bit) ===")
+    # Check the difference in Y value (Luma) for the same Green color across standards
+    # Since BT.2020 has a much wider Green gamut, the Y weight (0.678 vs 0.715)
+    # is applied slightly differently compared to BT.709, even for the same RGB value (0, 255, 0).
+    y709, _, _ = cvt.rgb_to_yuv(0, 255, 0, standard='bt709')
+    y2020, _, _ = cvt.rgb_to_yuv(0, 255, 0, standard='bt2020')
+    
+    print(f"Pure Green(0,255,0) Luma(Y) Value:")
+    print(f"BT.709  : {y709}")
+    print(f"BT.2020 : {y2020}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Color Space Converter')
+    parser = argparse.ArgumentParser(description='Color Space Converter. [10bit supported]', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-y', '--yuv', nargs='*', help='YUV value (Y, U, V)', type=int)
     parser.add_argument('-r', '--rgb', nargs='*', help='RGB value (R, G, B)', type=int)
-    parser.add_argument('-s', '--standard', default='bt601', choices=['bt601', 'bt709'], help='Color Space Standard (bt601, bt709)', type=str)
-    parser.add_argument('-t', '--range', default='full', choices=['full', 'limited', 'fr', 'lr'], help='Color Range (full, fr, limited, lr)', type=str)
+    parser.add_argument('-s', '--standard', default='bt601', choices=['bt601', 'bt709', 'bt2020'], help='Color Space Standard', type=str)
+    parser.add_argument('-t', '--range', default='full', choices=['full', 'limited', 'fr', 'lr'], help='Color Range', type=str)
+    parser.add_argument('-b', '--bit-depth', default=8, choices=[8, 10], help='Bit Depth', type=int)
     
     args = parser.parse_args()
     if args.yuv == None and args.rgb == None:
@@ -99,8 +118,8 @@ if __name__ == "__main__":
 
     converter = MyColorSpaceConverter()
     if args.yuv != None:
-        v0, v1, v2 = converter.yuv_to_rgb(args.yuv[0], args.yuv[1], args.yuv[2], standard=args.standard, range_type=color_range)
+        v0, v1, v2 = converter.yuv_to_rgb(args.yuv[0], args.yuv[1], args.yuv[2], standard=args.standard, range_type=color_range, bit_depth=args.bit_depth)
         print(f'Converter YUV to RGB {args.standard}, {color_range}: {args.yuv[0]}, {args.yuv[1]}, {args.yuv[2]} --> {v0}, {v1}, {v2}')
     elif args.rgb != None:
-        v0, v1, v2 = converter.rgb_to_yuv(args.rgb[0], args.rgb[1], args.rgb[2], standard=args.standard, range_type=color_range)
+        v0, v1, v2 = converter.rgb_to_yuv(args.rgb[0], args.rgb[1], args.rgb[2], standard=args.standard, range_type=color_range, bit_depth=args.bit_depth)
         print(f'Converter RGB to YUV {args.standard}, {color_range}: {args.rgb[0]}, {args.rgb[1]}, {args.rgb[2]} --> {v0}, {v1}, {v2}')
